@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
 
 st.set_page_config(page_title="InsightKube Revenue AI", layout="centered")
 
@@ -68,3 +69,88 @@ else:
     st.info("Carregue o CSV para obter a recomendação.")
     # Exibe o formato esperado para ajudar o usuário
     st.write("Formato esperado:", pd.DataFrame(columns=['data', 'quartos_ocupados', 'capacidade', 'preco_atual']))
+
+def gerar_pdf_report(res):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    
+    # Cabeçalho
+    pdf.cell(200, 10, txt="INSIGHTKUBE REVENUE AI - RELATÓRIO DIÁRIO", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Dados
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Data da Analise: {res['data']}", ln=True)
+    pdf.cell(200, 10, txt=f"Ocupacao Prevista: {res['ocupacao']:.1f}%", ln=True)
+    pdf.cell(200, 10, txt=f"Preco Recomendado: {res['rec']}", ln=True)
+    
+    # O "Dinheiro"
+    pdf.ln(5)
+    pdf.set_text_color(255, 0, 0) # Vermelho para a Ação
+    pdf.cell(200, 10, txt=f"ACAO IMEDIATA: {res['acao']}", ln=True)
+    
+    return pdf.output(dest='S').encode('latin-1') # Retorna o PDF como bytes
+
+# ... (teu código anterior igual até à parte do 'Ação')
+
+        st.divider()
+        st.subheader("📄 Relatório Executivo")
+        
+        # Preparar os dados para a função do PDF
+        dados_report = {
+            "data": hoje["data"],
+            "ocupacao": ocupacao,
+            "rec": rec,
+            "acao": acao
+        }
+        
+        # Gerar o PDF
+        pdf_bytes = gerar_pdf_report(dados_report)
+        
+        # Botão para o utilizador descarregar
+        st.download_button(
+            label="Descarregar Relatório PDF",
+            data=pdf_bytes,
+            file_name=f"Relatorio_InsightKube_{hoje['data'].replace('/', '-')}.pdf",
+            mime="application/pdf"
+        )
+        
+    except Exception as e:
+        st.error(f"Erro técnico: {e}")
+# ...
+
+# FUNÇÃO DO PDF MELHORADA (dentro ou fora do bloco, mas definida)
+def gerar_pdf_report(res):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Título
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(200, 10, txt="INSIGHTKUBE REVENUE AI", ln=True, align='C')
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Relatorio Diario de Tomada de Decisao", ln=True, align='C')
+    pdf.ln(10)
+    
+    # Bloco de Dados
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(200, 10, txt=f"Data da Analise: {res['data']}", ln=True)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt=f"Ocupacao Prevista: {res['ocupacao']:.1f}%", ln=True)
+    pdf.cell(200, 10, txt=f"Recomendacao: {res['rec']}", ln=True)
+    
+    # Bloco de Ação (Destaque)
+    pdf.ln(10)
+    pdf.set_fill_color(240, 242, 246)
+    pdf.set_font("Arial", 'B', 14)
+    pdf.set_text_color(255, 0, 0)
+    pdf.cell(200, 15, txt=f"ACAO IMEDIATA: {res['acao']}", ln=True, align='C', fill=True)
+    
+    # Nota de Rodapé
+    pdf.set_y(-30)
+    pdf.set_font("Arial", 'I', 8)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(0, 10, txt="InsightKube - Business Powered by Data. Confidencial.", align='C')
+    
+    # "S" retorna string, mas em Python 3 fpdf precisa de encode para bytes
+    return pdf.output(dest='S').encode('latin-1', 'ignore')
