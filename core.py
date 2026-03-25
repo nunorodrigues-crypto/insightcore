@@ -1,95 +1,70 @@
 import streamlit as st
 import pandas as pd
 
-# 1. Configuração de Marca e Título
 st.set_page_config(page_title="InsightKube Revenue AI", layout="centered")
 
-# Estilo Simples e Profissional
 st.markdown("""
     <style>
     .big-font { font-size:24px !important; font-weight: bold; }
-    .rec-font { font-size:20px !important; color: #FF4B4B; font-weight: bold;}
-    .action-font { font-size:18px !important; color: #2E8B57;}
+    .rec-font { font-size:24px !important; color: #FF4B4B; font-weight: bold; background-color: #f0f2f6; padding: 10px; border-radius: 10px;}
+    .action-font { font-size:20px !important; color: #2E8B57; font-weight: bold;}
     </style>
     """, unsafe_allow_html=True)
 
 st.title("🏨 Revenue AI para Hotelaria")
-st.subheader("Dizemos-te diariamente o que fazer para aumentar receitas e reduzir custos")
+st.subheader("Decisões diárias para aumentar receita")
 
-# 🔹 1. INGESTÃO DE DADOS (O Upload CSV do Cliente)
 st.sidebar.header("Módulo de Dados")
 uploaded_file = st.sidebar.file_uploader("Carregar CSV de Reservas", type=['csv'])
 
 if uploaded_file:
-    # Ler o CSV do cliente
     try:
-    df = pd.read_csv(uploaded_file, sep=';')
-    # Se só vier uma coluna, tenta com vírgula (padrão internacional)
-    if df.shape[1] == 1:
-        uploaded_file.seek(0) # Volta ao início do ficheiro
-        df = pd.read_csv(uploaded_file, sep=',')
-except Exception as e:
-    st.error("Erro na leitura do separador do ficheiro.")
-            
-        # Converter data
-        df['data'] = pd.to_csv(df['data'])
+        # Tenta ler com ponto e vírgula (padrão Excel PT)
+        df = pd.read_csv(uploaded_file, sep=None, engine='python')
         
-        # 🔹 2. MOTOR DE INTELIGÊNCIA (O teu Core Inteligente)
-        # Cálculos Simples
+        # Limpar nomes de colunas (remover espaços vazios)
+        df.columns = df.columns.str.strip()
+        
+        required_columns = ['data', 'quartos_ocupados', 'capacidade', 'preco_atual']
+        if not all(col in df.columns for col in required_columns):
+            st.error(f"Colunas detectadas: {list(df.columns)}")
+            st.error(f"O CSV deve conter exatamente: {required_columns}")
+            st.stop()
+            
+        # Converter data (formato europeu DD/MM/YY)
+        df['data'] = pd.to_datetime(df['data'], dayfirst=True).dt.strftime('%d/%m/%Y')
+        
+        # MOTOR DE INTELIGÊNCIA
         df['ocupacao_perc'] = (df['quartos_ocupados'] / df['capacidade']) * 100
         
-        # Pegamos nos dados de "Hoje" (última linha do ficheiro para simular o dia atual)
         hoje = df.iloc[-1]
-        data_hoje = hoje['data']
         ocupacao = hoje['ocupacao_perc']
         preco = hoje['preco_atual']
         
-        # 🧠 Regras Inteligentes (O teu Segredo)
+        # REGRAS INTELIGENTES
         if ocupacao < 60:
-            alerta = "⚠️ Baixa Procura"
-            recomendacao = "Baixar preços 12%"
-            acao = "Criar promoção 2 noites no Airbnb/Booking"
+            alerta, rec, acao = "⚠️ Baixa Procura", "Baixar preços 12%", "Criar promoção 2 noites no Airbnb/Booking"
         elif ocupacao > 85:
-            alerta = "🚀 Alta Procura"
-            recomendacao = "Aumentar preço 15%"
-            acao = "Fechar canais externos, priorizar venda direta"
+            alerta, rec, acao = "🚀 Alta Procura", "Aumentar preço 15%", "Fechar canais externos, priorizar venda direta"
         else:
-            alerta = "🟢 Estável"
-            recomendacao = "Manter preço"
-            acao = "Monitorizar concorrência próxima"
+            alerta, rec, acao = "🟢 Estável", "Manter preço", "Monitorizar concorrência próxima"
             
-        # 🔹 3. OUTPUT DE VALOR (A Recomendação Direta)
+        # OUTPUT DE VALOR
         st.divider()
-        st.markdown(f'<p class="big-font">📅 Previsão para: {data_hoje}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="big-font">📅 Previsão para: {hoje["data"]}</p>', unsafe_allow_html=True)
         
-        # Exibir Métricas Clave
         col1, col2 = st.columns(2)
-        col1.metric("Ocupação Prevista", f"{ocupacao:.0f}%", alerta)
+        col1.metric("Ocupação Prevista", f"{ocupacao:.1f}%", alerta)
         col2.metric("Preço Atual", f"{preco:.2f} €")
         
         st.divider()
         st.subheader("💡 Decisão do Dia")
+        st.markdown(f'<p class="rec-font">👉 {rec}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="action-font">📍 Ação: {acao}</p>', unsafe_allow_html=True)
         
-        # Exibir a Recomendação de forma Destacada (O que o cliente compra)
-        st.markdown(f'<p class="rec-font">👉 Recomendação: {recomendacao}</p>', unsafe_allow_html=True)
-        st.markdown(f'<p class="action-font">👉 Ação: {acao}</p>', unsafe_allow_html=True)
-        
-        st.info("Isto é uma recomendação gerada automaticamente para maximizar a sua receita com base no seu histórico e tendências atuais.")
-
     except Exception as e:
-        st.error(f"Erro ao processar o ficheiro: {e}")
-
+        st.error(f"Erro técnico: {e}")
 else:
-    # Mensagem inicial quando não há ficheiro
-    st.info("Por favor, carregue o CSV de reservas no menu lateral para obter a sua recomendação diária.")
-    
-    # Exemplo de formato de CSV para o cliente saber o que carregar
-    st.divider()
-    st.subheader("Exemplo de Formato de CSV Aceite")
-    exemplo_df = pd.DataFrame({
-        'data': ['2024-03-20', '2024-03-21', '2024-03-22'],
-        'quartos_ocupados': [15, 20, 12],
-        'capacidade': [25, 25, 25],
-        'preco_atual': [120.00, 130.00, 115.00]
-    })
-    st.dataframe(exemplo_df)
+    st.info("Carregue o CSV para obter a recomendação.")
+    # Exibe o formato esperado para ajudar o usuário
+    st.write("Formato esperado:", pd.DataFrame(columns=['data', 'quartos_ocupados', 'capacidade', 'preco_atual']))
