@@ -25,4 +25,4 @@ jobs:
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-        run: python auto_mailer.py
+        run: ls -R && python auto_mailer.py
