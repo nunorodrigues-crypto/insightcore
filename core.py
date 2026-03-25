@@ -64,4 +64,32 @@ if uploaded_file:
         
         # REGRAS
         if ocupacao < 60:
-            alerta, rec, acao = "⚠️ Baixa Procura", "Baixar preços 12%", "Criar promoção 2 noites no Airbnb
+            alerta, rec, acao = "⚠️ Baixa Procura", "Baixar preços 12%", "Criar promoção 2 noites no Airbnb/Booking"
+        elif ocupacao > 85:
+            alerta, rec, acao = "🚀 Alta Procura", "Aumentar preço 15%", "Fechar canais externos, priorizar venda direta"
+        else:
+            alerta, rec, acao = "🟢 Estável", "Manter preço", "Monitorizar concorrência próxima"
+            
+        # EXIBIÇÃO NA APP
+        st.divider()
+        st.markdown(f'<p class="big-font">📅 Previsão para: {hoje["data"]}</p>', unsafe_allow_html=True)
+        col1, col2 = st.columns(2)
+        col1.metric("Ocupação Prevista", f"{ocupacao:.1f}%", alerta)
+        col2.metric("Preço Atual", f"{preco:.2f} €")
+        
+        st.divider()
+        st.subheader("💡 Decisão do Dia")
+        st.markdown(f'<p class="rec-font">👉 {rec}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="action-font">📍 Ação: {acao}</p>', unsafe_allow_html=True)
+        
+        # BOTÃO DE PDF
+        st.divider()
+        dados_report = {"data": hoje["data"], "ocupacao": ocupacao, "rec": rec, "acao": acao}
+        pdf_bytes = gerar_pdf_report(dados_report)
+        st.download_button(label="📄 Descarregar Relatório PDF", data=pdf_bytes, 
+                           file_name=f"Relatorio_InsightKube_{hoje['data']}.pdf", mime="application/pdf")
+
+    except Exception as e:
+        st.error(f"Erro técnico: {e}")
+else:
+    st.info("Carregue o CSV para obter a recomendação.")
