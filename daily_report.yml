@@ -1,0 +1,29 @@
+name: Envio Diario Revenue AI
+
+on:
+  schedule:
+    # Corre todos os dias às 08:00 AM (Horário UTC)
+    - cron: '0 8 * * *'
+  workflow_dispatch: # Permite-te carregar num botão para testar manualmente
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar dependencias
+        run: |
+          pip install pandas fpdf smtplib
+
+      - name: Executar Motor de Inteligencia
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+        run: python auto_mailer.py
