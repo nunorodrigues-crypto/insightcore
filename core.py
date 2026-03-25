@@ -23,12 +23,13 @@ uploaded_file = st.sidebar.file_uploader("Carregar CSV de Reservas", type=['csv'
 if uploaded_file:
     # Ler o CSV do cliente
     try:
-        df = pd.read_csv(uploaded_file)
-        # Garanter que as colunas obrigatórias existem
-        required_columns = ['data', 'quartos_ocupados', 'capacidade', 'preco_atual']
-        if not all(col in df.columns for col in required_columns):
-            st.error(f"O CSV deve conter as colunas: {', '.join(required_columns)}")
-            st.stop()
+    df = pd.read_csv(uploaded_file, sep=';')
+    # Se só vier uma coluna, tenta com vírgula (padrão internacional)
+    if df.shape[1] == 1:
+        uploaded_file.seek(0) # Volta ao início do ficheiro
+        df = pd.read_csv(uploaded_file, sep=',')
+except Exception as e:
+    st.error("Erro na leitura do separador do ficheiro.")
             
         # Converter data
         df['data'] = pd.to_csv(df['data'])
