@@ -2,6 +2,27 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 
+st.title("🏨 InsightKube Revenue AI")
+
+# Criar os separadores baseados no teu slide
+tab1, tab2, tab3 = st.tabs(["📈 Revenue & Ocupação", "💰 Custos & Margem", "👥 Equipa & Operação"])
+
+with tab1:
+    st.header("Análise de Receita")
+    # Colocas aqui os teus gráficos de RevPAR e ADR que já tinhas
+    st.metric("RevPAR", "145€", "+12%")
+
+with tab2:
+    st.header("Eficiência Financeira")
+    col1, col2 = st.columns(2)
+    col1.metric("Margem Operacional", "32%", "-2%")
+    col2.metric("Breakeven Ocupação", "42%", "Estável")
+    # Gráfico de barras com comissões OTA vs Direto
+
+with tab3:
+    st.header("Gestão de Staff")
+    st.info("Rácio Staff/Ocupação atual: 1:4")
+    # Tabela de produtividade por colaborador
 # CONFIGURAÇÃO DA PÁGINA
 st.set_page_config(page_title="InsightKube Revenue AI", layout="centered")
 
