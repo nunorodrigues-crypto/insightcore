@@ -37,42 +37,59 @@ def enviar_relatorio():
     else:
         cor, rec, acao = "#f1c40f", "Manter Estável", "Focar em Upselling"
 
-    # --- CORPO DO EMAIL EM HTML ---
+# Simulação de status para os outros departamentos (baseado no teu slide)
+    status_custos = "⚠️ Margem Sob Pressão" if scoring_rate < 70 else "✅ Margem Estável"
+    status_equipa = "✅ Eficiência Ótima" if hoje['ocupacao_perc'] < 90 else "⚠️ Sobrecarga"
+
     html_body = f"""
     <html>
-    <body style="font-family: Arial, sans-serif; color: #333;">
-        <div style="max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-            <h2 style="color: #2c3e50; text-align: center;">🏨 InsightKube Revenue AI</h2>
-            <p style="text-align: center; font-size: 14px; color: #7f8c8d;">Relatório de Performance: {hoje['data']}</p>
-            <hr>
+    <body style="font-family: 'Segoe UI', Arial, sans-serif; color: #333; line-height: 1.6;">
+        <div style="max-width: 600px; margin: auto; border: 1px solid #eee; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+            <h2 style="color: #2c3e50; text-align: center; margin-bottom: 5px;">🏨 InsightKube Revenue AI</h2>
+            <p style="text-align: center; font-size: 13px; color: #95a5a6; margin-top: 0;">Relatório Executivo • {hoje['data']}</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
             
-            <div style="background-color: {cor}; color: white; padding: 15px; border-radius: 5px; text-align: center; margin: 20px 0;">
-                <h3 style="margin: 0;">RECOMENDAÇÃO: {rec}</h3>
-                <p style="margin: 5px 0 0 0;">Ação: {acao}</p>
+            <div style="background-color: {cor}; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0;">
+                <h3 style="margin: 0; font-size: 18px;">RECOMENDAÇÃO: {rec}</h3>
+                <p style="margin: 8px 0 0 0; font-size: 15px; opacity: 0.9;">Próximo Passo: {acao}</p>
             </div>
 
-            <table style="width: 100%; border-collapse: collapse;">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                 <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><b>Scoring Rate:</b></td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; color: #2980b9;"><b>{scoring_rate}/100</b></td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9;"><b>Scoring Rate:</b></td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9; text-align: right; color: #2980b9; font-size: 18px;"><b>{scoring_rate}/100</b></td>
                 </tr>
                 <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><b>Benchmark Mercado:</b></td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{benchmark_status} da Média</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9;"><b>Benchmark Mercado:</b></td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9; text-align: right;">{benchmark_status} da Média</td>
                 </tr>
                 <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee;"><b>Sensibilidade Preço:</b></td>
-                    <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">{sensibilidade}</td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9;"><b>Sensibilidade Preço:</b></td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f9f9f9; text-align: right;">{sensibilidade}</td>
                 </tr>
                 <tr>
-                    <td style="padding: 10px;"><b>Ocupação Atual:</b></td>
-                    <td style="padding: 10px; text-align: right;">{hoje['ocupacao_perc']:.1f}%</td>
+                    <td style="padding: 12px;"><b>Ocupação Atual:</b></td>
+                    <td style="padding: 12px; text-align: right;">{hoje['ocupacao_perc']:.1f}%</td>
                 </tr>
             </table>
 
-            <p style="font-size: 12px; color: #95a5a6; margin-top: 20px; text-align: center;">
-                Este relatório foi gerado automaticamente pelo Intelligent Core da InsightKube.
-            </p>
+            <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; font-size: 14px; color: #7f8c8d;">OUTROS INDICADORES:</p>
+                <div style="font-size: 13px;">
+                    <span style="display: inline-block; margin-right: 15px;">{status_custos}</span>
+                    <span style="display: inline-block;">{status_equipa}</span>
+                </div>
+            </div>
+
+            <div style="text-align: center;">
+                <a href="https://insightcore.streamlit.app" 
+                   style="background-color: #2c3e50; color: white; padding: 15px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 15px;">
+                   Abrir Painel Completo na Plataforma →
+                </a>
+                <p style="font-size: 11px; color: #bdc3c7; margin-top: 15px;">
+                    *Análise detalhada de Custos, Margens e Eficiência de Equipa disponível na App.
+                </p>
+            </div>
         </div>
     </body>
     </html>
