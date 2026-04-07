@@ -27,7 +27,7 @@ jobs:
           GMAIL_USER:           ${{ secrets.GMAIL_USER }}
           GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
           SHEET_URL_CLIENTE:    ${{ secrets.SHEET_URL_CLIENTE_1 }}
-          CLIENTE_EMAIL:        ${{ nuno.rodrigues@insightkube.com}}
+          CLIENTE_EMAIL:        ${{ secrets.CLIENTE_EMAIL_1 }}
           CLIENTE_NOME:         ${{ secrets.CLIENTE_NOME_1 }}
           MERCADO_AVG:          "72"
         run: python auto_mailer.py
