@@ -1,31 +1,55 @@
-name: Envio Diario Revenue AI
+name: InsightKube — Relatório Diário de Hotelaria
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # trigger manual para testar
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 17 * * *'   # todos os dias às 17h Lisboa (UTC)
 
 jobs:
-  build:
+  enviar-relatorio:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout codigo
+      - name: Checkout código
         uses: actions/checkout@v4
 
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
+          python-version: '3.11'
 
-      - name: Instalar dependencias
-        run: pip install pandas fpdf
+      - name: Instalar dependências
+        run: pip install pandas fpdf requests
 
-      - name: Executar Motor
+      # ── CLIENTE 1 ─────────────────────────────────────────────
+      - name: Enviar relatório — Cliente 1
         env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
-        run: |
-          echo "--- LISTA DE FICHEIROS ---"
-          ls
-          echo "--- A EXECUTAR SCRIPT ---"
-          python auto_mailer.py
+          GMAIL_USER:           ${{ secrets.GMAIL_USER }}
+          GMAIL_PASSWORD:       ${{ secrets.GMAIL_PASSWORD }}
+          SHEET_URL_CLIENTE:    ${{ secrets.SHEET_URL_CLIENTE_1 }}
+          CLIENTE_EMAIL:        ${{ secrets.CLIENTE_EMAIL_1 }}
+          CLIENTE_NOME:         ${{ secrets.CLIENTE_NOME_1 }}
+          MERCADO_AVG:          "72"
+        run: python auto_mailer.py
+
+      # ── CLIENTE 2 (descomenta quando tiveres o 2º cliente) ────
+      # - name: Enviar relatório — Cliente 2
+      #   env:
+      #     GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      #     GMAIL_PASSWORD:     ${{ secrets.GMAIL_PASSWORD }}
+      #     SHEET_URL_CLIENTE:  ${{ secrets.SHEET_URL_CLIENTE_2 }}
+      #     CLIENTE_EMAIL:      ${{ secrets.CLIENTE_EMAIL_2 }}
+      #     CLIENTE_NOME:       ${{ secrets.CLIENTE_NOME_2 }}
+      #     MERCADO_AVG:        "68"
+      #   run: python auto_mailer.py
+
+      # ── CLIENTE 3 ─────────────────────────────────────────────
+      # - name: Enviar relatório — Cliente 3
+      #   env:
+      #     GMAIL_USER:         ${{ secrets.GMAIL_USER }}
+      #     GMAIL_PASSWORD:     ${{ secrets.GMAIL_PASSWORD }}
+      #     SHEET_URL_CLIENTE:  ${{ secrets.SHEET_URL_CLIENTE_3 }}
+      #     CLIENTE_EMAIL:      ${{ secrets.CLIENTE_EMAIL_3 }}
+      #     CLIENTE_NOME:       ${{ secrets.CLIENTE_NOME_3 }}
+      #     MERCADO_AVG:        "70"
+      #   run: python auto_mailer.py
