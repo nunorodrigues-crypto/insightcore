@@ -6,7 +6,7 @@ from fpdf import FPDF
 from datetime import datetime
 
 
-st.set_page_config(page_title="InsightKube — Command Center", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="InsightKube — Command Center", page_icon="", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
 <style>
@@ -129,7 +129,7 @@ try:
     with c4: card("RevPAR",f"{revpar:.0f}€",f"{'▲' if revpar_delta>=0 else '▼'} {abs(revpar_delta):.1f}% vs ontem","up" if revpar_delta>=0 else "down")
 
     st.divider()
-    tab1,tab2,tab3,tab4 = st.tabs(["🧠 Command Center","📈 Revenue & Ocupação","💰 Custos & Margem","👥 Equipa & Operação"])
+    tab1,tab2,tab3,tab4 = st.tabs(["Command Center","Revenue & Ocupação","Custos & Margem","Equipa & Operação"])
 
     with tab1:
         cl,cr = st.columns([2,1])
@@ -211,7 +211,7 @@ try:
     with c_dl:
         section("Exportar PDF")
         pdf_bytes = gerar_pdf({"data":hoje['data_fmt'],"score":health_score,"ocupacao":ocupacao,"revpar":revpar,"margem":margem,"rec":rec,"acao":acao})
-        st.download_button("📄 Descarregar Relatório PDF", data=pdf_bytes, file_name=f"InsightKube_{hoje['data_fmt'].replace('/','')}.pdf", mime="application/pdf", use_container_width=True)
+        st.download_button("Descarregar Relatório PDF", data=pdf_bytes, file_name=f"InsightKube_{hoje['data_fmt'].replace('/','')}.pdf", mime="application/pdf", use_container_width=True)
     with c_tb:
         section("Dados do Período")
         st.dataframe(df[['data_fmt','quartos_ocupados','capacidade','ocupacao_perc','preco_atual','revpar']].rename(columns={'data_fmt':'Data','quartos_ocupados':'Ocup.','capacidade':'Cap.','ocupacao_perc':'Ocup. %','preco_atual':'ADR €','revpar':'RevPAR €'}).style.format({'Ocup. %':'{:.1f}','ADR €':'{:.0f}','RevPAR €':'{:.0f}'}), use_container_width=True, hide_index=True)
