@@ -97,7 +97,7 @@ try:
     if not all(c in df.columns for c in required):
         st.error(f"O CSV precisa das colunas: {required}"); st.stop()
 
-    df['data'] = pd.to_datetime(df['data'], dayfirst=True)
+    df['data'] = pd.to_datetime(df['data'], format='mixed', dayfirst=False)
     df['ocupacao_perc'] = (df['quartos_ocupados'] / df['capacidade']) * 100
     df['revpar'] = df['preco_atual'] * (df['ocupacao_perc'] / 100)
     df['data_fmt'] = df['data'].dt.strftime('%d/%m/%Y')
