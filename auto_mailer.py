@@ -54,8 +54,12 @@ def carregar_dados():
     else:
         # Fallback local para testes
         df = pd.read_csv("Livro1.csv", sep=";")
+          df['quartos_ocupados'] = pd.to_numeric(df['quartos_ocupados'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+          df['capacidade']       = pd.to_numeric(df['capacidade'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+          df['preco_atual']      = pd.to_numeric(df['preco_atual'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+          df.dropna(subset=['quartos_ocupados', 'capacidade', 'preco_atual'], inplace=True)
 
-    df.columns = df.columns.str.strip().str.lower()
+  df.columns = df.columns.str.strip()
 
     # Normalizar nomes de colunas comuns
     col_map = {
