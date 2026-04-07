@@ -100,11 +100,21 @@ try:
     required = ['data','quartos_ocupados','capacidade','preco_atual']
     if not all(c in df.columns for c in required):
         st.error(f"O CSV precisa das colunas: {required}"); st.stop()
+df['data'] = pd.to_datetime(df['data'], format='mixed', dayfirst=False)
 
-    df['data'] = pd.to_datetime(df['data'], format='mixed', dayfirst=False)
-    df['ocupacao_perc'] = (df['quartos_ocupados'] / df['capacidade']) * 100
-    df['revpar'] = df['preco_atual'] * (df['ocupacao_perc'] / 100)
-    df['data_fmt'] = df['data'].dt.strftime('%d/%m/%Y')
+for col in ['capacidade', 'preco_atual']:
+    df[col] = (df[col].astype(str)
+               .str.replace('€', '', regex=False)
+               .str.replace('\xa0', '', regex=False)
+               .str.replace('\u202f', '', regex=False)
+               .str.strip()
+               .str.replace(r'\s+', '', regex=True)
+               .str.replace(',', '.', regex=False)
+               )
+    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+df['quartos_ocupados'] = pd.to_numeric(df['quartos_ocupados'], errors='coerce')
+df.dropna(subset=['data', 'quartos_ocupados', 'capacidade', 'preco_atual'], inplace=True)
 
     hoje = df.iloc[-1]
     ocupacao = hoje['ocupacao_perc']; preco = hoje['preco_atual']; revpar = hoje['revpar']
