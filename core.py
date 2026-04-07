@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 from fpdf import FPDF
 from datetime import datetime
 
+
 st.set_page_config(page_title="InsightKube — Command Center", page_icon="📊", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
