@@ -1,89 +1,70 @@
 """
-InsightKube — Auto Mailer v2
-Lê dados do Google Sheets do cliente, calcula KPI de hotelaria,
-e envia email diário rico com análise completa.
+InsightKube — Auto Mailer v3 com Gemini AI
+Calcula KPI de hotelaria e usa Gemini para interpretação inteligente.
 
-Variáveis de ambiente necessárias (GitHub Secrets):
-  GMAIL_USER         — email remetente
-  GMAIL_PASSWORD     — app password Gmail
-  SHEET_URL_CLIENTE  — URL público do Google Sheets em CSV (um por cliente)
-  CLIENTE_EMAIL      — email do cliente destinatário
-  CLIENTE_NOME       — nome do alojamento
-  MERCADO_AVG        — ocupação média do mercado (default: 72)
+GitHub Secrets necessários:
+  GMAIL_USER, GMAIL_PASSWORD
+  SHEET_URL_CLIENTE, CLIENTE_EMAIL, CLIENTE_NOME
+  GEMINI_API_KEY
+  MERCADO_AVG (opcional, default 72)
 """
 
-import os, smtplib, requests
+import os, smtplib, requests, json
 from io import StringIO
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 # ── CONFIG ──────────────────────────────────────────────────────────
-GMAIL_USER      = os.getenv("GMAIL_USER")
-GMAIL_PASSWORD  = os.getenv("GMAIL_PASSWORD")
-SHEET_URL       = os.getenv("SHEET_URL_CLIENTE")        # URL CSV do Google Sheets
-CLIENTE_EMAIL   = os.getenv("CLIENTE_EMAIL")
-CLIENTE_NOME    = os.getenv("CLIENTE_NOME", "Alojamento")
-MERCADO_AVG     = float(os.getenv("MERCADO_AVG", "72"))
-APP_URL         = "https://insightcore-fdctr3i6ssvwyxwdzilc7b.streamlit.app"
+GMAIL_USER     = os.getenv("GMAIL_USER")
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
+SHEET_URL      = os.getenv("SHEET_URL_CLIENTE")
+CLIENTE_EMAIL  = os.getenv("CLIENTE_EMAIL")
+CLIENTE_NOME   = os.getenv("CLIENTE_NOME", "Alojamento")
+MERCADO_AVG    = float(os.getenv("MERCADO_AVG", "72"))
+GEMINI_API_KEY = os.getenv("AIzaSyC_bzk-cFi5SxJQrI1G3WmPT63Pi1bQrAE")
+APP_URL        = "https://insightcore-fdctr3i6ssvwyxwdzilc7b.streamlit.app"
 
-# ── CORES ────────────────────────────────────────────────────────────
-TEAL      = "#0F9E8A"
-TEAL_DARK = "#085041"
-YELLOW    = "#F5C518"
-RED       = "#F85149"
-GREEN     = "#3FB950"
-DARK      = "#0D1117"
-CARD_BG   = "#161B22"
-BORDER    = "#30363D"
+TEAL="0F9E8A"; TEAL_DARK="085041"; YELLOW="F5C518"
+RED="F85149"; GREEN="3FB950"; DARK="0D1117"; CARD_BG="161B22"; BORDER="30363D"
 
 # ── CARREGAR DADOS ───────────────────────────────────────────────────
 def carregar_dados():
-    """Lê Google Sheets exportado como CSV público."""
     if SHEET_URL:
-        # Converter URL do Sheets para CSV export
         if "spreadsheets/d/" in SHEET_URL:
-            sheet_id = SHEET_URL.split("spreadsheets/d/")[1].split("/")[0]
-            csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
+            sid = SHEET_URL.split("spreadsheets/d/")[1].split("/")[0]
+            url = f"https://docs.google.com/spreadsheets/d/1WIHg5olaxpAD0hVw59ttC5HoEycObPM0_4c0p6gucpo/edit?gid=0#gid=0"
         else:
-            csv_url = SHEET_URL
-        resp = requests.get(csv_url, timeout=30)
+            url = SHEET_URL
+        resp = requests.get(url, timeout=30)
         resp.raise_for_status()
         df = pd.read_csv(StringIO(resp.text))
     else:
-        # Fallback local para testes
         df = pd.read_csv("Livro1.csv", sep=";")
-          df['quartos_ocupados'] = pd.to_numeric(df['quartos_ocupados'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
-          df['capacidade']       = pd.to_numeric(df['capacidade'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
-          df['preco_atual']      = pd.to_numeric(df['preco_atual'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
-          df.dropna(subset=['quartos_ocupados', 'capacidade', 'preco_atual'], inplace=True)
 
-  df.columns = df.columns.str.strip()
-
-    # Normalizar nomes de colunas comuns
+    df.columns = df.columns.str.strip().str.lower()
     col_map = {
-        "quartos_ocupados": ["quartos_ocupados", "rooms_occupied", "ocupados", "sold"],
-        "capacidade":       ["capacidade", "capacity", "total_rooms", "rooms_available"],
-        "preco_atual":      ["preco_atual", "adr", "price", "tarifa", "preco"],
-        "data":             ["data", "date", "dia"],
+        "quartos_ocupados": ["quartos_ocupados","rooms_occupied","ocupados","sold"],
+        "capacidade":       ["capacidade","capacity","total_rooms","rooms_available"],
+        "preco_atual":      ["preco_atual","adr","price","tarifa","preco"],
+        "data":             ["data","date","dia"],
     }
-    for standard, variants in col_map.items():
+    for std, variants in col_map.items():
         for v in variants:
-            if v in df.columns and standard not in df.columns:
-                df.rename(columns={v: standard}, inplace=True)
+            if v in df.columns and std not in df.columns:
+                df.rename(columns={v: std}, inplace=True)
                 break
 
-    required = ["data", "quartos_ocupados", "capacidade", "preco_atual"]
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Colunas em falta no Google Sheets: {missing}")
-
-    df["data"] = pd.to_datetime(df["data"], dayfirst=True)
+    df["data"] = pd.to_datetime(df["data"], format="mixed", dayfirst=False)
+    for col in ["capacidade", "preco_atual"]:
+        df[col] = (df[col].astype(str)
+                   .str.replace("€","",regex=False).str.replace("\xa0","",regex=False)
+                   .str.replace("\u202f","",regex=False).str.strip()
+                   .str.replace(r"\s+","",regex=True).str.replace(",",".",regex=False))
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df["quartos_ocupados"] = pd.to_numeric(df["quartos_ocupados"], errors="coerce")
-    df["capacidade"]       = pd.to_numeric(df["capacidade"], errors="coerce")
-    df["preco_atual"]      = pd.to_numeric(df["preco_atual"], errors="coerce")
-    df.dropna(subset=required, inplace=True)
+    df.dropna(subset=["data","quartos_ocupados","capacidade","preco_atual"], inplace=True)
     df.sort_values("data", inplace=True)
     return df
 
@@ -94,353 +75,308 @@ def calcular_kpi(df):
     df["revpar"]        = df["preco_atual"] * (df["ocupacao_perc"] / 100)
     df["receita"]       = df["quartos_ocupados"] * df["preco_atual"]
 
-    hoje       = df.iloc[-1]
-    ontem      = df.iloc[-2] if len(df) > 1 else hoje
-    sem_passada = df.iloc[-8] if len(df) > 7 else df.iloc[0]
-    ultimos7   = df.tail(7)
-    ultimos30  = df.tail(30)
+    hoje    = df.iloc[-1]
+    ontem   = df.iloc[-2] if len(df) > 1 else hoje
+    u7      = df.tail(7)
+    u30     = df.tail(30)
 
-    ocup       = hoje["ocupacao_perc"]
-    adr        = hoje["preco_atual"]
-    revpar     = hoje["revpar"]
-    receita    = hoje["receita"]
+    ocup    = hoje["ocupacao_perc"]
+    adr     = hoje["preco_atual"]
+    revpar  = hoje["revpar"]
+    receita = hoje["receita"]
 
-    # Variações
-    ocup_d     = ocup - ontem["ocupacao_perc"]
-    adr_d      = adr - ontem["preco_atual"]
-    revpar_d   = ((revpar - ontem["revpar"]) / ontem["revpar"] * 100) if ontem["revpar"] else 0
+    ocup_d  = ocup - ontem["ocupacao_perc"]
+    adr_d   = adr  - ontem["preco_atual"]
+    revpar_d = ((revpar - ontem["revpar"]) / ontem["revpar"] * 100) if ontem["revpar"] else 0
 
-    # Médias
-    ocup_7     = ultimos7["ocupacao_perc"].mean()
-    ocup_30    = ultimos30["ocupacao_perc"].mean()
-    adr_7      = ultimos7["preco_atual"].mean()
-    revpar_7   = ultimos7["revpar"].mean()
-    receita_7  = ultimos7["receita"].sum()
-    receita_30 = ultimos30["receita"].sum()
+    ocup_7    = u7["ocupacao_perc"].mean()
+    ocup_30   = u30["ocupacao_perc"].mean()
+    adr_7     = u7["preco_atual"].mean()
+    revpar_7  = u7["revpar"].mean()
+    rec_7     = u7["receita"].sum()
+    rec_30    = u30["receita"].sum()
+    tendencia = "subida" if u7["ocupacao_perc"].iloc[-1] > u7["ocupacao_perc"].iloc[0] else "descida" if u7["ocupacao_perc"].iloc[-1] < u7["ocupacao_perc"].iloc[0] else "estável"
 
-    # Margem estimada (estrutura típica de AL/hotel pequeno)
-    custo_fixo_pct  = 45   # % da receita em custos fixos
-    custo_var_pct   = 15   # % da receita em custos variáveis
-    margem          = max(5, 100 - custo_fixo_pct - custo_var_pct - max(0, (ocup - 75) * 0.2))
-    custo_pessoal   = 32 + max(0, (ocup - 85) * 0.5)
-
-    # Scores de risco
-    health_score   = round(min(100, (ocup * 0.45) + (margem * 0.35) + 15), 0)
-    revenue_risk   = round(max(0, (75 - ocup) * 1.3), 1) if ocup < 75 else max(0, round((ocup - 92) * 0.8, 1))
-    churn_risk     = round(max(10, 55 - (ocup - 50) * 0.6), 1)
-
-    # Sensibilidade de preço
-    sens = "Alta" if ocup > 80 else "Média" if ocup > 60 else "Baixa"
-    bench = "Acima" if ocup > MERCADO_AVG else "Abaixo"
-
-    # Decisão
-    if ocup < 55:
-        rec, acao, cor_rec, urgencia = "Baixar Preços 12-15%", "Criar promoção flash no Booking/Airbnb para os próximos 3 dias", RED, "URGENTE"
-    elif ocup < 70:
-        rec, acao, cor_rec, urgencia = "Baixar Preços 8%", "Activar descontos de last-minute nos canais OTA", "#F5A623", "ATENÇÃO"
-    elif ocup > 90:
-        rec, acao, cor_rec, urgencia = "Subir Preços 15-20%", "Fechar canais externos — priorizar reservas directas e upselling", GREEN, "OPORTUNIDADE"
-    elif ocup > 80:
-        rec, acao, cor_rec, urgencia = "Subir Preços 8-10%", "Maximizar ADR — activar tarifas de fim de semana", TEAL, "OPORTUNIDADE"
-    else:
-        rec, acao, cor_rec, urgencia = "Manter Preço Estável", "Focar em upselling: early check-in, late check-out, serviços extras", YELLOW, "ESTÁVEL"
-
-    # Alertas
-    alertas = []
-    if ocup < 60:
-        alertas.append(("red", "🔴 Ocupação crítica", f"Ocupação de {ocup:.1f}% está abaixo do limiar de rentabilidade (60%). Acção imediata necessária."))
-    if abs(ocup_d) > 10:
-        tipo = "red" if ocup_d < 0 else "green"
-        alertas.append((tipo, f"{'📉' if ocup_d<0 else '📈'} Variação brusca", f"Ocupação variou {ocup_d:+.1f}pp face a ontem. Verificar cancelamentos ou reservas de grupo."))
-    if custo_pessoal > 42:
-        alertas.append(("yellow", "⚠️ Custo de pessoal elevado", f"Rácio pessoal/faturação estimado em {custo_pessoal:.1f}% — acima do benchmark de 38%."))
-    if ocup < MERCADO_AVG - 10:
-        alertas.append(("yellow", "📊 Abaixo do mercado", f"Ocupação {MERCADO_AVG - ocup:.1f}pp abaixo da média de mercado ({MERCADO_AVG}%). Rever estratégia de pricing."))
-    alertas.append(("yellow", "🌍 Pressão externa", "Guerra no Golfo: combustíveis +10 cêntimos, peixe e carne +6%, transportes +10%. Impacto nos custos operacionais."))
-    if not alertas:
-        alertas.append(("green", "✅ Tudo normal", "Todos os indicadores dentro dos parâmetros esperados. Continuar a monitorizar."))
+    health_score = round(min(100, (ocup * 0.5) + 20), 0)
+    revenue_risk = round(max(0, (75 - ocup) * 1.3), 1) if ocup < 75 else max(0, round((ocup - 92) * 0.8, 1))
 
     return {
-        "hoje_fmt":    hoje["data"].strftime("%d/%m/%Y"),
-        "dia_semana":  hoje["data"].strftime("%A"),
+        "hoje_fmt":   hoje["data"].strftime("%d/%m/%Y"),
+        "dia_semana": hoje["data"].strftime("%A"),
         "ocup": ocup, "adr": adr, "revpar": revpar, "receita": receita,
         "ocup_d": ocup_d, "adr_d": adr_d, "revpar_d": revpar_d,
         "ocup_7": ocup_7, "ocup_30": ocup_30,
         "adr_7": adr_7, "revpar_7": revpar_7,
-        "receita_7": receita_7, "receita_30": receita_30,
-        "margem": margem, "custo_pessoal": custo_pessoal,
-        "health_score": health_score, "revenue_risk": revenue_risk, "churn_risk": churn_risk,
-        "sens": sens, "bench": bench,
-        "rec": rec, "acao": acao, "cor_rec": cor_rec, "urgencia": urgencia,
-        "alertas": alertas,
+        "rec_7": rec_7, "rec_30": rec_30,
+        "tendencia": tendencia,
+        "health_score": health_score,
+        "revenue_risk": revenue_risk,
+        "benchmark": "Acima" if ocup > MERCADO_AVG else "Abaixo",
         "df": df,
     }
 
-# ── MINI SPARKLINE EM ASCII ──────────────────────────────────────────
-def sparkline(values, width=20):
-    if len(values) < 2:
-        return "—"
+# ── GEMINI AI — INTERPRETAÇÃO ────────────────────────────────────────
+def interpretar_com_gemini(k):
+    """Envia os KPI ao Gemini e pede análise inteligente em JSON."""
+
+    prompt = f"""És o analista sénior da InsightKube, uma consultoria de dados para hotelaria.
+Analisa os seguintes KPI do alojamento "{CLIENTE_NOME}" para o dia {k['hoje_fmt']} e responde APENAS com um objecto JSON válido, sem texto antes ou depois, sem markdown, sem backticks.
+
+KPI DO DIA:
+- Ocupação: {k['ocup']:.1f}% (variação vs ontem: {k['ocup_d']:+.1f}pp)
+- ADR (preço médio): {k['adr']:.0f}€ (variação: {k['adr_d']:+.1f}€)
+- RevPAR: {k['revpar']:.0f}€ (variação: {k['revpar_d']:+.1f}%)
+- Receita do dia: {k['receita']:.0f}€
+- Ocupação média 7 dias: {k['ocup_7']:.1f}%
+- Ocupação média 30 dias: {k['ocup_30']:.1f}%
+- Receita 7 dias: {k['rec_7']:.0f}€
+- Receita 30 dias: {k['rec_30']:.0f}€
+- Tendência da semana: {k['tendencia']}
+- Benchmark de mercado: {k['benchmark']} da média ({MERCADO_AVG:.0f}%)
+- Health Score: {k['health_score']:.0f}/100
+- Revenue Risk: {k['revenue_risk']:.1f}%
+- Dia da semana: {k['dia_semana']}
+
+Contexto de mercado: Guerra no Golfo está a pressionar custos — combustíveis +10 cêntimos, transportes +10%, fornecedores alimentares +6%.
+
+Responde com este JSON exacto:
+{{
+  "decisao_titulo": "frase curta e directa com a recomendação principal (máx 8 palavras)",
+  "decisao_acao": "acção concreta e específica que o gestor deve tomar hoje (máx 20 palavras)",
+  "urgencia": "URGENTE|ATENÇÃO|OPORTUNIDADE|ESTÁVEL",
+  "cor_hex": "#F85149|#F5A623|#3FB950|#F5C518",
+  "analise_narrativa": "parágrafo de 3-4 frases com análise aprofundada: o que está a acontecer, porquê, e o que significa para o negócio. Tom profissional mas directo.",
+  "alertas": [
+    {{"tipo": "red|yellow|green", "titulo": "título curto", "texto": "explicação de 1-2 frases"}},
+    {{"tipo": "red|yellow|green", "titulo": "título curto", "texto": "explicação de 1-2 frases"}},
+    {{"tipo": "red|yellow|green", "titulo": "título curto", "texto": "explicação de 1-2 frases"}}
+  ],
+  "insight_semana": "observação inteligente sobre a tendência da semana (1-2 frases)",
+  "previsao_amanha": "previsão breve para amanhã baseada nos padrões identificados (1 frase)"
+}}"""
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 1000}
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=30)
+        resp.raise_for_status()
+        texto = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        # Limpar markdown se existir
+        texto = texto.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        return json.loads(texto)
+    except Exception as e:
+        print(f"⚠️ Gemini falhou ({e}) — usando fallback")
+        return fallback_analise(k)
+
+def fallback_analise(k):
+    """Análise de fallback se Gemini falhar."""
+    ocup = k["ocup"]
+    if ocup < 55:
+        dec, acao, urg, cor = "Baixar Preços 12-15% — Urgente", "Criar promoção flash no Booking/Airbnb para os próximos 3 dias", "URGENTE", f"#{RED}"
+    elif ocup < 70:
+        dec, acao, urg, cor = "Baixar Preços 8% — Procura Fraca", "Activar descontos last-minute nos canais OTA", "ATENÇÃO", "#F5A623"
+    elif ocup > 90:
+        dec, acao, urg, cor = "Subir Preços 15-20% — Alta Procura", "Fechar canais externos e priorizar venda directa", "OPORTUNIDADE", f"#{GREEN}"
+    elif ocup > 80:
+        dec, acao, urg, cor = "Subir Preços 8-10% — Boa Procura", "Maximizar ADR e activar tarifas de fim de semana", "OPORTUNIDADE", f"#{TEAL}"
+    else:
+        dec, acao, urg, cor = "Manter Preço Estável", "Focar em upselling: early check-in e serviços extras", "ESTÁVEL", f"#{YELLOW}"
+    return {
+        "decisao_titulo": dec, "decisao_acao": acao, "urgencia": urg, "cor_hex": cor,
+        "analise_narrativa": f"Ocupação de {ocup:.1f}% com tendência {k['tendencia']}. RevPAR de {k['revpar']:.0f}€. A monitorizar.",
+        "alertas": [{"tipo": "yellow", "titulo": "🌍 Pressão de custos", "texto": "Guerra no Golfo: combustíveis e fornecedores sob pressão. Monitorizar margens."}],
+        "insight_semana": f"Ocupação média de {k['ocup_7']:.1f}% nos últimos 7 dias.",
+        "previsao_amanha": "Continuar a monitorizar os padrões de reserva."
+    }
+
+# ── SPARKLINE ────────────────────────────────────────────────────────
+def sparkline(values):
+    if len(values) < 2: return "—"
     mn, mx = min(values), max(values)
     rng = mx - mn if mx != mn else 1
     chars = "▁▂▃▄▅▆▇█"
-    bars = [chars[int((v - mn) / rng * 7)] for v in values]
-    return "".join(bars[-width:])
+    return "".join(chars[int((v-mn)/rng*7)] for v in values[-14:])
 
-# ── CONSTRUIR EMAIL HTML ─────────────────────────────────────────────
-def build_email(k):
+# ── BUILD EMAIL ──────────────────────────────────────────────────────
+def build_email(k, ai):
     hoje = k["hoje_fmt"]
-    spark_ocup  = sparkline(k["df"].tail(14)["ocupacao_perc"].tolist())
-    spark_revpar = sparkline(k["df"].tail(14)["revpar"].tolist())
+    spark_o = sparkline(k["df"]["ocupacao_perc"].tolist())
+    spark_r = sparkline(k["df"]["revpar"].tolist())
 
-    def delta_badge(val, unit="pp", inverse=False):
-        pos = val >= 0 if not inverse else val <= 0
-        col = GREEN if pos else RED
+    def delta_badge(val, unit="pp"):
+        col = f"#{GREEN}" if val >= 0 else f"#{RED}"
         arrow = "▲" if val >= 0 else "▼"
         return f'<span style="color:{col};font-size:13px;font-weight:600">{arrow} {abs(val):.1f}{unit}</span>'
 
-    def health_color(score):
-        if score >= 70: return GREEN
-        if score >= 50: return YELLOW
-        return RED
-
-    def risk_color(risk):
-        if risk < 20: return GREEN
-        if risk < 40: return YELLOW
-        return RED
+    def hcol(s): return f"#{GREEN}" if s>=70 else f"#{YELLOW}" if s>=50 else f"#{RED}"
 
     alertas_html = ""
-    for tipo, titulo, texto in k["alertas"]:
-        border = {"red": RED, "green": GREEN, "yellow": YELLOW}.get(tipo, TEAL)
+    for a in ai.get("alertas", []):
+        border = {"red": f"#{RED}", "green": f"#{GREEN}", "yellow": f"#{YELLOW}"}.get(a["tipo"], f"#{TEAL}")
         alertas_html += f"""
-        <tr>
-          <td style="padding:8px 0">
-            <div style="border-left:4px solid {border};padding:10px 14px;background:#1C1F26;border-radius:0 6px 6px 0">
-              <div style="font-size:13px;font-weight:700;color:#E6EDF3;margin-bottom:3px">{titulo}</div>
-              <div style="font-size:12px;color:#8B949E">{texto}</div>
-            </div>
-          </td>
-        </tr>"""
+        <tr><td style="padding:6px 0">
+          <div style="border-left:4px solid {border};padding:10px 14px;background:#1C1F26;border-radius:0 6px 6px 0">
+            <div style="font-size:13px;font-weight:700;color:#E6EDF3;margin-bottom:3px">{a['titulo']}</div>
+            <div style="font-size:12px;color:#8B949E">{a['texto']}</div>
+          </div>
+        </td></tr>"""
 
-    # KPI rows para tabela
     kpi_rows = [
-        ("Ocupação hoje",    f"{k['ocup']:.1f}%",    delta_badge(k['ocup_d'])),
-        ("ADR (preço médio)",f"{k['adr']:.0f}€",     delta_badge(k['adr_d'], "€")),
-        ("RevPAR",           f"{k['revpar']:.0f}€",  delta_badge(k['revpar_d'], "%")),
-        ("Receita do dia",   f"{k['receita']:.0f}€", ""),
-        ("Ocupação 7 dias",  f"{k['ocup_7']:.1f}%",  f'<span style="color:#8B949E;font-size:12px">média</span>'),
-        ("Receita 7 dias",   f"{k['receita_7']:.0f}€",""),
-        ("Receita 30 dias",  f"{k['receita_30']:.0f}€",""),
-        ("Benchmark mercado",f"{k['bench']} ({MERCADO_AVG:.0f}%)", ""),
-        ("Margem estimada",  f"{k['margem']:.1f}%",  ""),
-        ("Custo pessoal",    f"{k['custo_pessoal']:.1f}%", ""),
+        ("Ocupação hoje",     f"{k['ocup']:.1f}%",   delta_badge(k['ocup_d'])),
+        ("ADR",               f"{k['adr']:.0f}€",    delta_badge(k['adr_d'], "€")),
+        ("RevPAR",            f"{k['revpar']:.0f}€", delta_badge(k['revpar_d'], "%")),
+        ("Receita do dia",    f"{k['receita']:.0f}€",""),
+        ("Ocupação 7 dias",   f"{k['ocup_7']:.1f}%", "média"),
+        ("Ocupação 30 dias",  f"{k['ocup_30']:.1f}%","média"),
+        ("Receita 7 dias",    f"{k['rec_7']:.0f}€",  ""),
+        ("Receita 30 dias",   f"{k['rec_30']:.0f}€", ""),
+        ("Benchmark mercado", k['benchmark'],         f"{MERCADO_AVG:.0f}% média"),
+        ("Tendência semana",  k['tendencia'].upper(), ""),
     ]
     kpi_html = ""
     for i, (label, val, extra) in enumerate(kpi_rows):
-        bg = "#161B22" if i % 2 == 0 else "#1C1F26"
+        bg = f"#{CARD_BG}" if i%2==0 else "#1C1F26"
         kpi_html += f"""
         <tr style="background:{bg}">
-          <td style="padding:10px 14px;font-size:13px;color:#8B949E;border-bottom:1px solid #30363D">{label}</td>
-          <td style="padding:10px 14px;font-size:14px;font-weight:700;color:#E6EDF3;text-align:right;border-bottom:1px solid #30363D">{val}</td>
-          <td style="padding:10px 14px;text-align:right;border-bottom:1px solid #30363D">{extra}</td>
+          <td style="padding:10px 14px;font-size:13px;color:#8B949E;border-bottom:1px solid #{BORDER}">{label}</td>
+          <td style="padding:10px 14px;font-size:14px;font-weight:700;color:#E6EDF3;text-align:right;border-bottom:1px solid #{BORDER}">{val}</td>
+          <td style="padding:10px 14px;font-size:12px;color:#8B949E;text-align:right;border-bottom:1px solid #{BORDER}">{extra}</td>
         </tr>"""
+
+    cor_dec = ai.get("cor_hex", f"#{TEAL}")
 
     html = f"""<!DOCTYPE html>
 <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0D1117;font-family:'Segoe UI',Arial,sans-serif;color:#E6EDF3">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#0D1117;padding:20px 0">
+<body style="margin:0;padding:0;background:#{DARK};font-family:'Segoe UI',Arial,sans-serif;color:#E6EDF3">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#{DARK};padding:20px 0">
 <tr><td align="center">
 <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;width:100%">
 
-  <!-- HEADER -->
-  <tr><td style="background:linear-gradient(90deg,{TEAL} 0%,{TEAL_DARK} 100%);padding:22px 28px;border-radius:12px 12px 0 0">
+  <tr><td style="background:linear-gradient(90deg,#{TEAL} 0%,#{TEAL_DARK} 100%);padding:22px 28px;border-radius:12px 12px 0 0">
     <table width="100%"><tr>
-      <td>
-        <div style="font-size:22px;font-weight:800;color:#fff">
-          <span style="color:#fff">Insight</span><span style="color:{YELLOW}">Kube</span>
-        </div>
-        <div style="font-size:12px;color:#A8D5CE;margin-top:3px">Business powered by Data · Relatório Diário</div>
-      </td>
-      <td align="right">
-        <div style="font-size:13px;color:#fff;font-weight:600">{CLIENTE_NOME}</div>
-        <div style="font-size:11px;color:#A8D5CE">{hoje} · {k["dia_semana"]}</div>
-      </td>
+      <td><div style="font-size:22px;font-weight:800;color:#fff">Insight<span style="color:#{YELLOW}">Kube</span></div>
+          <div style="font-size:12px;color:#A8D5CE;margin-top:3px">Business powered by Data · Relatório Diário</div></td>
+      <td align="right"><div style="font-size:13px;color:#fff;font-weight:600">{CLIENTE_NOME}</div>
+          <div style="font-size:11px;color:#A8D5CE">{hoje} · {k['dia_semana']}</div></td>
     </tr></table>
   </td></tr>
 
-  <!-- HEALTH SCORE BANNER -->
-  <tr><td style="background:#161B22;padding:20px 28px;border-bottom:1px solid {BORDER}">
+  <tr><td style="background:#{CARD_BG};padding:20px 28px;border-bottom:1px solid #{BORDER}">
     <table width="100%"><tr>
-      <td width="80">
-        <div style="width:70px;height:70px;border-radius:50%;background:{DARK};border:4px solid {health_color(k['health_score'])};display:flex;align-items:center;justify-content:center;text-align:center;padding-top:14px">
-          <div style="font-size:24px;font-weight:800;color:{health_color(k['health_score'])}">{k['health_score']:.0f}</div>
-          <div style="font-size:9px;color:#8B949E;margin-top:-4px">SCORE</div>
-        </div>
+      <td width="80" style="text-align:center">
+        <div style="font-size:42px;font-weight:800;color:{hcol(k['health_score'])}">{k['health_score']:.0f}</div>
+        <div style="font-size:9px;color:#8B949E;text-transform:uppercase">Health Score</div>
       </td>
       <td style="padding-left:18px">
-        <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Health Score do dia</div>
-        <div style="font-size:15px;font-weight:700;color:#E6EDF3">
-          {"✅ Negócio saudável" if k['health_score']>=70 else "⚠️ Atenção necessária" if k['health_score']>=50 else "🔴 Situação crítica"}
-        </div>
-        <div style="font-size:12px;color:#8B949E;margin-top:3px">
-          Revenue Risk: <span style="color:{risk_color(k['revenue_risk'])};font-weight:600">{k['revenue_risk']:.1f}%</span> &nbsp;|&nbsp;
-          Churn Risk: <span style="color:{risk_color(k['churn_risk'])};font-weight:600">{k['churn_risk']:.1f}%</span> &nbsp;|&nbsp;
-          Sensibilidade: <span style="color:{YELLOW};font-weight:600">{k['sens']}</span>
-        </div>
+        <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Análise InsightKube · AI</div>
+        <div style="font-size:14px;color:#E6EDF3;line-height:1.5">{ai.get('analise_narrativa','')}</div>
       </td>
     </tr></table>
   </td></tr>
 
-  <!-- DECISÃO DO DIA -->
-  <tr><td style="background:{CARD_BG};padding:20px 28px;border-left:4px solid {k['cor_rec']};border-bottom:1px solid {BORDER}">
-    <div style="font-size:10px;color:{k['cor_rec']};text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:6px">
-      🎯 DECISÃO DO DIA — {k['urgencia']}
+  <tr><td style="background:#{CARD_BG};padding:20px 28px;border-left:4px solid {cor_dec};border-bottom:1px solid #{BORDER}">
+    <div style="font-size:10px;color:{cor_dec};text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:6px">
+      🎯 DECISÃO DO DIA — {ai.get('urgencia','ESTÁVEL')}
     </div>
-    <div style="font-size:20px;font-weight:800;color:{k['cor_rec']};margin-bottom:6px">{k['rec']}</div>
-    <div style="font-size:13px;color:#A8D5CE">▶ Acção imediata: {k['acao']}</div>
+    <div style="font-size:20px;font-weight:800;color:{cor_dec};margin-bottom:6px">{ai.get('decisao_titulo','')}</div>
+    <div style="font-size:13px;color:#A8D5CE">▶ {ai.get('decisao_acao','')}</div>
   </td></tr>
 
-  <!-- KPI CARDS 4x -->
-  <tr><td style="background:{DARK};padding:16px 28px;border-bottom:1px solid {BORDER}">
+  <tr><td style="background:#{DARK};padding:16px 28px;border-bottom:1px solid #{BORDER}">
     <table width="100%" cellspacing="8"><tr>
-      <td width="25%" style="background:{CARD_BG};border:1px solid {BORDER};border-radius:8px;padding:14px;text-align:center">
+      <td width="25%" style="background:#{CARD_BG};border:1px solid #{BORDER};border-radius:8px;padding:14px;text-align:center">
         <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:4px">Ocupação</div>
         <div style="font-size:26px;font-weight:800;color:{'#3FB950' if k['ocup']>75 else '#F85149' if k['ocup']<60 else '#F5C518'}">{k['ocup']:.1f}%</div>
         <div style="font-size:11px;color:#8B949E">{delta_badge(k['ocup_d'])} vs ontem</div>
-        <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:1px">{spark_ocup}</div>
+        <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:1px">{spark_o}</div>
       </td>
-      <td width="25%" style="background:{CARD_BG};border:1px solid {BORDER};border-radius:8px;padding:14px;text-align:center">
+      <td width="25%" style="background:#{CARD_BG};border:1px solid #{BORDER};border-radius:8px;padding:14px;text-align:center">
         <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:4px">ADR</div>
-        <div style="font-size:26px;font-weight:800;color:{TEAL}">{k['adr']:.0f}€</div>
-        <div style="font-size:11px;color:#8B949E">{delta_badge(k['adr_d'], '€')} vs ontem</div>
+        <div style="font-size:26px;font-weight:800;color:#{TEAL}">{k['adr']:.0f}€</div>
+        <div style="font-size:11px;color:#8B949E">{delta_badge(k['adr_d'],'€')} vs ontem</div>
         <div style="font-size:11px;color:#8B949E;margin-top:4px">7d: {k['adr_7']:.0f}€</div>
       </td>
-      <td width="25%" style="background:{CARD_BG};border:1px solid {BORDER};border-radius:8px;padding:14px;text-align:center">
+      <td width="25%" style="background:#{CARD_BG};border:1px solid #{BORDER};border-radius:8px;padding:14px;text-align:center">
         <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:4px">RevPAR</div>
-        <div style="font-size:26px;font-weight:800;color:{YELLOW}">{k['revpar']:.0f}€</div>
-        <div style="font-size:11px;color:#8B949E">{delta_badge(k['revpar_d'], '%')} vs ontem</div>
-        <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:1px">{spark_revpar}</div>
+        <div style="font-size:26px;font-weight:800;color:#{YELLOW}">{k['revpar']:.0f}€</div>
+        <div style="font-size:11px;color:#8B949E">{delta_badge(k['revpar_d'],'%')} vs ontem</div>
+        <div style="font-size:11px;color:#555;margin-top:4px;letter-spacing:1px">{spark_r}</div>
       </td>
-      <td width="25%" style="background:{CARD_BG};border:1px solid {BORDER};border-radius:8px;padding:14px;text-align:center">
+      <td width="25%" style="background:#{CARD_BG};border:1px solid #{BORDER};border-radius:8px;padding:14px;text-align:center">
         <div style="font-size:10px;color:#8B949E;text-transform:uppercase;margin-bottom:4px">Receita dia</div>
         <div style="font-size:26px;font-weight:800;color:#E6EDF3">{k['receita']:.0f}€</div>
-        <div style="font-size:11px;color:#8B949E">7d: {k['receita_7']:.0f}€</div>
-        <div style="font-size:11px;color:#8B949E;margin-top:2px">30d: {k['receita_30']:.0f}€</div>
+        <div style="font-size:11px;color:#8B949E">7d: {k['rec_7']:.0f}€</div>
+        <div style="font-size:11px;color:#8B949E;margin-top:2px">30d: {k['rec_30']:.0f}€</div>
       </td>
     </tr></table>
   </td></tr>
 
-  <!-- ALERTAS -->
-  <tr><td style="background:{DARK};padding:0 28px 8px 28px">
+  <tr><td style="background:#{DARK};padding:0 28px 8px 28px">
     <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;padding:16px 0 8px 0;font-weight:600">Alertas do dia</div>
     <table width="100%">{alertas_html}</table>
   </td></tr>
 
-  <!-- KPI TABELA COMPLETA -->
-  <tr><td style="background:{DARK};padding:0 28px 8px 28px">
+  <tr><td style="background:#{DARK};padding:0 28px 8px 28px">
     <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;padding:16px 0 8px 0;font-weight:600">Análise completa</div>
-    <table width="100%" style="border:1px solid {BORDER};border-radius:8px;overflow:hidden;border-collapse:collapse">
-      {kpi_html}
-    </table>
+    <table width="100%" style="border:1px solid #{BORDER};border-radius:8px;overflow:hidden;border-collapse:collapse">{kpi_html}</table>
   </td></tr>
 
-  <!-- BENCHMARK -->
-  <tr><td style="background:{CARD_BG};padding:16px 28px;border:1px solid {BORDER};border-radius:8px;margin:0 28px">
-  </td></tr>
-  <tr><td style="background:{DARK};padding:8px 28px 16px 28px">
-    <table width="100%" style="background:{CARD_BG};border:1px solid {BORDER};border-radius:8px;padding:16px">
-    <tr><td colspan="3" style="padding:12px 14px 6px 14px">
-      <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;font-weight:600">Benchmark de Mercado</div>
+  <tr><td style="background:#{DARK};padding:0 28px 16px 28px">
+    <table width="100%" style="background:#{CARD_BG};border:1px solid #{BORDER};border-radius:8px">
+    <tr><td colspan="2" style="padding:12px 14px 4px 14px">
+      <div style="font-size:11px;color:#8B949E;text-transform:uppercase;letter-spacing:.06em;font-weight:600">Insight da Semana · AI</div>
     </td></tr>
-    <tr>
-      <td style="padding:8px 14px;text-align:center">
-        <div style="font-size:11px;color:#8B949E">O seu negócio</div>
-        <div style="font-size:22px;font-weight:800;color:{TEAL}">{k['ocup']:.1f}%</div>
-      </td>
-      <td style="padding:8px 14px;text-align:center">
-        <div style="font-size:20px;font-weight:800;color:{'#3FB950' if k['bench']=='Acima' else '#F85149'}">{k['bench']}</div>
-        <div style="font-size:11px;color:#8B949E">do mercado</div>
-      </td>
-      <td style="padding:8px 14px;text-align:center">
-        <div style="font-size:11px;color:#8B949E">Média mercado</div>
-        <div style="font-size:22px;font-weight:800;color:#8B949E">{MERCADO_AVG:.0f}%</div>
-      </td>
-    </tr>
+    <tr><td style="padding:6px 14px 8px 14px;font-size:13px;color:#E6EDF3">{ai.get('insight_semana','')}</td></tr>
+    <tr><td style="padding:4px 14px 12px 14px">
+      <div style="font-size:11px;color:#{TEAL};font-weight:600;margin-bottom:3px">Previsão para amanhã</div>
+      <div style="font-size:13px;color:#8B949E">{ai.get('previsao_amanha','')}</div>
+    </td></tr>
     </table>
   </td></tr>
 
-  <!-- CTA BUTTON -->
-  <tr><td style="background:{DARK};padding:16px 28px 24px 28px;text-align:center">
-    <a href="{APP_URL}"
-       style="display:inline-block;background:linear-gradient(90deg,{TEAL} 0%,{TEAL_DARK} 100%);color:#fff;padding:16px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;letter-spacing:.02em">
+  <tr><td style="background:#{DARK};padding:8px 28px 24px 28px;text-align:center">
+    <a href="{APP_URL}" style="display:inline-block;background:linear-gradient(90deg,#{TEAL} 0%,#{TEAL_DARK} 100%);color:#fff;padding:16px 36px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px">
       📊 Abrir Análise Completa na Plataforma →
     </a>
-    <div style="font-size:11px;color:#555;margin-top:10px">
-      Gráficos · Tendências · Revenue Intelligence · Lifecycle Intelligence
-    </div>
+    <div style="font-size:11px;color:#555;margin-top:10px">Gráficos · Tendências · Revenue Intelligence</div>
   </td></tr>
 
-  <!-- FOOTER -->
-  <tr><td style="background:#161B22;padding:16px 28px;border-radius:0 0 12px 12px;border-top:1px solid {BORDER}">
+  <tr><td style="background:#{CARD_BG};padding:16px 28px;border-radius:0 0 12px 12px;border-top:1px solid #{BORDER}">
     <table width="100%"><tr>
-      <td><div style="font-size:11px;color:#555">InsightKube · Business powered by Data</div></td>
-      <td align="right"><div style="font-size:11px;color:#555">Relatório gerado automaticamente · {hoje}</div></td>
+      <td><div style="font-size:11px;color:#555">InsightKube · Business powered by Data · Análise por Gemini AI</div></td>
+      <td align="right"><div style="font-size:11px;color:#555">{hoje}</div></td>
     </tr></table>
   </td></tr>
 
-</table>
-</td></tr></table>
+</table></td></tr></table>
 </body></html>"""
     return html
 
-
-# ── ENVIAR EMAIL ─────────────────────────────────────────────────────
-def enviar_email(html, kpi):
-    score = kpi["health_score"]
-    ocup  = kpi["ocup"]
-    hoje  = kpi["hoje_fmt"]
-
+# ── ENVIAR ───────────────────────────────────────────────────────────
+def enviar_email(html, k, ai):
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"InsightKube · {CLIENTE_NOME} · {hoje} · Score {score:.0f}/100 · Ocup. {ocup:.1f}%"
+    msg["Subject"] = f"InsightKube · {CLIENTE_NOME} · {k['hoje_fmt']} · Score {k['health_score']:.0f}/100 · {ai.get('urgencia','')}"
     msg["From"]    = f"InsightKube <{GMAIL_USER}>"
     msg["To"]      = CLIENTE_EMAIL
-
-    # Versão texto simples
-    texto = f"""InsightKube — Relatório Diário
-{CLIENTE_NOME} · {hoje}
-
-Health Score: {score:.0f}/100
-Ocupação: {ocup:.1f}%
-ADR: {kpi['adr']:.0f}€
-RevPAR: {kpi['revpar']:.0f}€
-Receita: {kpi['receita']:.0f}€
-
-Decisão do dia: {kpi['rec']}
-Acção: {kpi['acao']}
-
-Ver análise completa: {APP_URL}
-
-InsightKube · Business powered by Data
-"""
-    msg.attach(MIMEText(texto, "plain"))
+    msg.attach(MIMEText(f"InsightKube — {CLIENTE_NOME} — {k['hoje_fmt']}\n\n{ai.get('analise_narrativa','')}\n\nDecisão: {ai.get('decisao_titulo','')}\nAcção: {ai.get('decisao_acao','')}\n\nVer análise: {APP_URL}", "plain"))
     msg.attach(MIMEText(html, "html"))
-
-    with smtplib.SMTP("smtp.gmail.com", 587) as server:
-        server.starttls()
-        server.login(GMAIL_USER, GMAIL_PASSWORD)
-        server.send_message(msg)
-
-    print(f"✅ Email enviado para {CLIENTE_EMAIL} — Score: {score:.0f} | Ocup: {ocup:.1f}%")
-
+    with smtplib.SMTP("smtp.gmail.com", 587) as s:
+        s.starttls(); s.login(GMAIL_USER, GMAIL_PASSWORD); s.send_message(msg)
+    print(f"✅ Email enviado para {CLIENTE_EMAIL}")
 
 # ── MAIN ─────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("InsightKube Auto Mailer v2 — a iniciar...")
-
-    df   = carregar_dados()
-    print(f"✅ Dados carregados: {len(df)} registos")
-
-    kpi  = calcular_kpi(df)
-    print(f"✅ KPI calculados — Score: {kpi['health_score']:.0f} | Ocup: {kpi['ocup']:.1f}%")
-
-    html = build_email(kpi)
-    enviar_email(html, kpi)
+    print("InsightKube Auto Mailer v3 — Gemini AI")
+    df  = carregar_dados()
+    print(f"✅ {len(df)} registos carregados")
+    kpi = calcular_kpi(df)
+    print(f"✅ KPI: Ocup {kpi['ocup']:.1f}% | RevPAR {kpi['revpar']:.0f}€ | Score {kpi['health_score']:.0f}")
+    print("🤖 A chamar Gemini AI para interpretação...")
+    ai  = interpretar_com_gemini(kpi)
+    print(f"✅ AI: {ai.get('urgencia','')} — {ai.get('decisao_titulo','')}")
+    html = build_email(kpi, ai)
+    enviar_email(html, kpi, ai)
