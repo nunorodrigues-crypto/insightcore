@@ -93,6 +93,10 @@ if not uploaded_file:
 try:
     df = pd.read_csv(uploaded_file, sep=None, engine='python')
     df.columns = df.columns.str.strip()
+    df['quartos_ocupados'] = pd.to_numeric(df['quartos_ocupados'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+    df['capacidade']       = pd.to_numeric(df['capacidade'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+    df['preco_atual']      = pd.to_numeric(df['preco_atual'].astype(str).str.replace(',', '.').str.strip(), errors='coerce')
+    df.dropna(subset=['quartos_ocupados', 'capacidade', 'preco_atual'], inplace=True)
     required = ['data','quartos_ocupados','capacidade','preco_atual']
     if not all(c in df.columns for c in required):
         st.error(f"O CSV precisa das colunas: {required}"); st.stop()
