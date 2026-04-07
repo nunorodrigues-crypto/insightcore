@@ -2,10 +2,10 @@ import streamlit as st
 import pandas as pd
 from fpdf import FPDF
 
-st.title("🏨 InsightKube Revenue AI")
+st.title("InsightKube Revenue AI")
 
 # Criar os separadores baseados no teu slide
-tab1, tab2, tab3 = st.tabs(["📈 Revenue & Ocupação", "💰 Custos & Margem", "👥 Equipa & Operação"])
+tab1, tab2, tab3 = st.tabs(["Revenue & Ocupação", "Custos & Margem", "Equipa & Operação"])
 
 with tab1:
     st.header("Análise de Receita")
@@ -87,7 +87,7 @@ if uploaded_file:
         if ocupacao < 60:
             alerta, rec, acao = "⚠️ Baixa Procura", "Baixar preços 12%", "Criar promoção 2 noites no Airbnb/Booking"
         elif ocupacao > 85:
-            alerta, rec, acao = "🚀 Alta Procura", "Aumentar preço 15%", "Fechar canais externos, priorizar venda direta"
+            alerta, rec, acao = "Alta Procura", "Aumentar preço 15%", "Fechar canais externos, priorizar venda direta"
         else:
             alerta, rec, acao = "🟢 Estável", "Manter preço", "Monitorizar concorrência próxima"
             
@@ -99,9 +99,9 @@ if uploaded_file:
         col2.metric("Preço Atual", f"{preco:.2f} €")
         
         st.divider()
-        st.subheader("💡 Decisão do Dia")
-        st.markdown(f'<p class="rec-font">👉 {rec}</p>', unsafe_allow_html=True)
-        st.markdown(f'<p class="action-font">📍 Ação: {acao}</p>', unsafe_allow_html=True)
+        st.subheader("Decisão do Dia")
+        st.markdown(f'<p class="rec-font"> {rec}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="action-font"> Ação: {acao}</p>', unsafe_allow_html=True)
         
         # BOTÃO DE PDF
         st.divider()
