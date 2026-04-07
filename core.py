@@ -82,7 +82,7 @@ with st.sidebar:
 
 agora = datetime.now().strftime("%d %b %Y | %H:%M")
 cliente_label = nome_cliente if nome_cliente else "Sem cliente carregado"
-st.markdown(f'<div class="ik-header"><div><div class="ik-header-title">📊 InsightKube — Command Center</div><div class="ik-header-sub">AI-Driven Decision Intelligence · Hotelaria & Restauração</div></div><div class="ik-header-meta"><div style="color:#fff;font-weight:600">{cliente_label}</div><div>Actualizado: {agora}</div></div></div>', unsafe_allow_html=True)
+st.markdown(f'<div class="ik-header"><div><div class="ik-header-title">📊 InsightKube — Command Center</div><div class="ik-header-sub">Data-Driven Decision · Hotelaria </div></div><div class="ik-header-meta"><div style="color:#fff;font-weight:600">{cliente_label}</div><div>Actualizado: {agora}</div></div></div>', unsafe_allow_html=True)
 
 if not uploaded_file:
     for c in st.columns(4): 
