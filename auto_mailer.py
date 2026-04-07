@@ -97,7 +97,7 @@ def enviar_relatorio():
 
     # --- ENVIO ---
     msg = MIMEMultipart()
-    msg['Subject'] = f"📊 InsightKube: Relatório {hoje['data']} (Score: {scoring_rate})"
+    msg['Subject'] = f"InsightKube: Relatório {hoje['data']} (Score: {scoring_rate})"
     msg['From'] = GMAIL_USER
     msg['To'] = GMAIL_USER
     msg.attach(MIMEText(html_body, 'html'))
@@ -107,7 +107,7 @@ def enviar_relatorio():
         server.login(GMAIL_USER, GMAIL_PASSWORD)
         server.send_message(msg)
     
-    print("✅ Email Premium enviado!")
+    print("Email Premium enviado!")
 
 if __name__ == "__main__":
     enviar_relatorio()
