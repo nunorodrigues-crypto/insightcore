@@ -4,3 +4,4 @@ plotly
 fpdf
 streamlit-option-menu
 requests
+google-generativeai
